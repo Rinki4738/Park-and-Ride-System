@@ -147,27 +147,25 @@ const rideSchema = new mongoose.Schema({
     maxlength: [500, "Notes cannot exceed 500 characters"]
   }
 }, { 
-  timestamps: true,
-  indexes: [
-    // For driver's rides
-    { driver: 1, status: 1 },
-    { driver: 1, createdAt: -1 },
-    
-    // For finding rides by timing
-    { departureTime: 1, status: 1 },
-    
-    // For location-based queries (not exact, but helps with range queries)
-    { "fromLocation.latitude": 1, "fromLocation.longitude": 1 },
-    { "toLocation.latitude": 1, "toLocation.longitude": 1 },
-    
-    // For ride status
-    { status: 1 },
-    
-    // For finding rides with available seats
-    { status: 1, seatsBooked: 1 }
-  ]
+  timestamps: true
 });
 
+// For driver's rides
+rideSchema.index({ driver: 1, status: 1 });
+rideSchema.index({ driver: 1, createdAt: -1 });
+
+// For finding rides by timing
+rideSchema.index({ departureTime: 1, status: 1 });
+
+// For location-based queries (not exact, but helps with range queries)
+rideSchema.index({ "fromLocation.latitude": 1, "fromLocation.longitude": 1 });
+rideSchema.index({ "toLocation.latitude": 1, "toLocation.longitude": 1 });
+
+// For ride status
+rideSchema.index({ status: 1 });
+
+// For finding rides with available seats
+rideSchema.index({ status: 1, seatsBooked: 1 });
 // Validation: totalSeats must be >= seatsBooked
 rideSchema.pre("save", function(next) {
   if (this.seatsBooked > this.totalSeats) {
