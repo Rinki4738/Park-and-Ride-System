@@ -5,11 +5,20 @@ import jwt from "jsonwebtoken";
 // REGISTER
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, carNumber } = req.body;
+
+    if (!carNumber) {
+      return res.status(400).json({ msg: "Car number is required" });
+    }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ msg: "User already exists" });
+    }
+
+    const carNumberExists = await User.findOne({ carNumber });
+    if (carNumberExists) {
+      return res.status(400).json({ msg: "Car number already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -17,7 +26,8 @@ export const registerUser = async (req, res) => {
     const user = await User.create({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      carNumber
     });
 
     res.status(201).json({ msg: "User registered successfully" });
