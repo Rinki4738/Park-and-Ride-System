@@ -87,32 +87,30 @@ const bookingSchema = new mongoose.Schema({
     maxlength: [500, "Notes cannot exceed 500 characters"]
   }
 }, { 
-  timestamps: true,
-  indexes: [
-    { user: 1, status: 1 },
-    { user: 1, createdAt: -1 },
-    
-    // For preventing double booking of same slot
-    // A slot cannot have 2 overlapping bookings with status "booked" or "in-progress"
-    { slot: 1, status: 1 },
-    
-    // For entry gate verification - carNumber lookup
-    { carNumber: 1, status: 1 },
-    { carNumber: 1, startTime: 1 },
-    
-    // For lot analytics
-    { parkingLot: 1, status: 1 },
-    { parkingLot: 1, createdAt: -1 },
-    
-    // For date range queries
-    { startTime: 1, endTime: 1 },
-    
-    // For payment tracking
-    { paymentStatus: 1 },
-    { status: 1, paymentStatus: 1 }
-  ]
+  timestamps: true
 });
 
+bookingSchema.index({ user: 1, status: 1 });
+bookingSchema.index({ user: 1, createdAt: -1 });
+
+// For preventing double booking of same slot
+// A slot cannot have 2 overlapping bookings with status "booked" or "in-progress"
+bookingSchema.index({ slot: 1, status: 1 });
+
+// For entry gate verification - carNumber lookup
+bookingSchema.index({ carNumber: 1, status: 1 });
+bookingSchema.index({ carNumber: 1, startTime: 1 });
+
+// For lot analytics
+bookingSchema.index({ parkingLot: 1, status: 1 });
+bookingSchema.index({ parkingLot: 1, createdAt: -1 });
+
+// For date range queries
+bookingSchema.index({ startTime: 1, endTime: 1 });
+
+// For payment tracking
+bookingSchema.index({ paymentStatus: 1 });
+bookingSchema.index({ status: 1, paymentStatus: 1 });
 // Validation: endTime must be after startTime
 bookingSchema.pre("save", function(next) {
   if (this.endTime <= this.startTime) {
