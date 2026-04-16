@@ -34,14 +34,12 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   }
-}, { 
-  timestamps: true,
-  // Add indexes at schema level
-  indexes: [
-    { carNumber: 1 }, // For parking entry verification
-    { email: 1 },      // For login
-    { createdAt: 1 }   // For user filtering
-  ]
+}, {
+  timestamps: true
 });
 
+// Add indexes using Mongoose's supported schema index API
+userSchema.index({ carNumber: 1 }); // For parking entry verification
+userSchema.index({ email: 1 }); // For login
+userSchema.index({ createdAt: 1 }); // For user filtering
 export default mongoose.model("User", userSchema);
