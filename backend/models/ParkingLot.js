@@ -85,16 +85,15 @@ const parkingLotSchema = new mongoose.Schema({
     type: String,
     maxlength: [500, "Description cannot exceed 500 characters"]
   }
-}, { 
-  timestamps: true,
-  indexes: [
-    { name: 1 },                           // For searching by name
-    { "location.latitude": 1, "location.longitude": 1 }, // For geographic queries
-    { availability: 1 },                   // For finding available lots
-    { isActive: 1 }                        // For filtering active lots
-  ]
+}, {
+  timestamps: true
 });
 
+// Indexes
+parkingLotSchema.index({ name: 1 }); // For searching by name
+parkingLotSchema.index({ "location.latitude": 1, "location.longitude": 1 }); // For geographic queries
+parkingLotSchema.index({ availableSlots: 1 }); // For finding available lots
+parkingLotSchema.index({ isActive: 1 }); // For filtering active lots
 // Method to update available slots (call when booking is made/cancelled)
 parkingLotSchema.methods.updateAvailableSlots = function(count) {
   this.availableSlots = Math.max(0, this.availableSlots + count);
