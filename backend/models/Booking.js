@@ -128,29 +128,124 @@ bookingSchema.pre("save", function(next) {
   next();
 });
 
+const BOOKING_SLOT_LOCK_COLLECTION = "booking_slot_locks";
+const BOOKING_SLOT_LOCK_TTL_MS = 30 * 1000;
+
+async function acquireSlotLock(slot) {
+  const locks = mongoose.connection.collection(BOOKING_SLOT_LOCK_COLLECTION);
+  const now = new Date();
+  const lockToken = new mongoose.Types.ObjectId().toString();
+  const expiresAt = new Date(now.getTime() + BOOKING_SLOT_LOCK_TTL_MS);
+
+  const result = await locks.findOneAndUpdate(
+    {
+      _id: slot.toString(),
+      $or: [
+        { expiresAt: { $lte: now } },
+        { expiresAt: { $exists: false } }
+      ]
+    },
+    {
+      $set: {
+        token: lockToken,
+        expiresAt,
+        updatedAt: now
+      },
+      $setOnInsert: {
+        createdAt: now
+      }
+    },
+    {
+      upsert: true,
+      returnDocument: "after"
+    }
+  );
+
+  if (!result || !result.value || result.value.token !== lockToken) {
+    throw new Error("Another booking is currently being processed for this slot. Please try again.");
+  }
+
+  return lockToken;
+}
+
+async function releaseSlotLock(slot, lockToken) {
+  if (!slot || !lockToken) {
+    return;
+  }
+
+  const locks = mongoose.connection.collection(BOOKING_SLOT_LOCK_COLLECTION);
+  await locks.deleteOne({
+    _id: slot.toString(),
+    token: lockToken
+  });
+}
+
 // Pre-save: prevent double booking
-// Check for overlapping bookings on the same slot
+// Serialize overlapping-booking checks per slot with an atomic lock
 bookingSchema.pre("save", async function(next) {
-  if (this.isModified("slot") || this.isNew) {
+  const shouldCheckOverlap =
+    this.isNew ||
+    this.isModified("slot") ||
+    this.isModified("startTime") ||
+    this.isModified("endTime") ||
+    this.isModified("status");
+
+  const shouldBlockSlot =
+    this.status === "booked" || this.status === "in-progress";
+
+  if (!shouldCheckOverlap || !shouldBlockSlot) {
+    return next();
+  }
+
+  try {
+    const lockToken = await acquireSlotLock(this.slot);
+    this.$locals.slotLockToken = lockToken;
+
     const overlap = await mongoose.model("Booking").findOne({
       slot: this.slot,
       status: { $in: ["booked", "in-progress"] },
-      $or: [
-        {
-          startTime: { $lt: this.endTime },
-          endTime: { $gt: this.startTime }
-        }
-      ],
+      startTime: { $lt: this.endTime },
+      endTime: { $gt: this.startTime },
       _id: { $ne: this._id } // Exclude current booking
     });
 
     if (overlap) {
+      await releaseSlotLock(this.slot, lockToken);
+      delete this.$locals.slotLockToken;
       throw new Error("This slot is already booked for the selected time period");
     }
+
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
 
+// Release per-slot lock after a successful save
+bookingSchema.post("save", async function(doc, next) {
+  try {
+    await releaseSlotLock(doc.slot, doc.$locals && doc.$locals.slotLockToken);
+    if (doc.$locals) {
+      delete doc.$locals.slotLockToken;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Release per-slot lock if the save fails after acquiring it
+bookingSchema.post("save", async function(error, doc, next) {
+  try {
+    await releaseSlotLock(doc && doc.slot, doc && doc.$locals && doc.$locals.slotLockToken);
+    if (doc && doc.$locals) {
+      delete doc.$locals.slotLockToken;
+    }
+  } catch (releaseError) {
+    return next(releaseError);
+  }
+  next(error);
+});
 // Instance method: mark as in-progress (vehicle entered)
 bookingSchema.methods.markAsInProgress = function() {
   this.status = "in-progress";
